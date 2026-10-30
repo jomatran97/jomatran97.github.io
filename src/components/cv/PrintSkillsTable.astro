@@ -1,0 +1,28 @@
+---
+import type { Localized } from '~/lib/content';
+import { skillItemText } from '~/lib/cv';
+
+interface Props {
+  skills: Localized<'skills'>[];
+  languages: { label: string; items: { language: string; proficiency: string }[] };
+}
+const { skills, languages } = Astro.props;
+const rows = [...skills]
+  .sort((a, b) => a.data.order - b.data.order)
+  .map((s) => ({ group: s.data.group, text: s.data.items.map(skillItemText).join(', ') }));
+rows.push({
+  group: languages.label,
+  text: languages.items.map((l) => `${l.language} (${l.proficiency})`).join(', '),
+});
+---
+
+<table>
+  <tbody>
+    {rows.map((r) => (
+      <tr>
+        <th scope="row">{r.group}</th>
+        <td>{r.text}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>

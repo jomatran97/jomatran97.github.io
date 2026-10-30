@@ -1,0 +1,43 @@
+---
+import type { Localized } from '~/lib/content';
+import { companyLabel, formatDateRange } from '~/lib/cv';
+import { useT, type Lang } from '~/i18n';
+import { localePath } from '~/i18n/routes';
+import StarCard from './StarCard.astro';
+
+interface Props {
+  id: string;
+  role?: Localized<'experience'>;
+  stories: Localized<'star'>[];
+  lang: Lang;
+}
+const { id, role, stories, lang } = Astro.props;
+const t = useT(lang);
+---
+
+<section id={id} aria-labelledby={`${id}-h`} class="group">
+  <header class="mb-5">
+    <h2 id={`${id}-h`} class="text-[1.75rem]">
+      {role ? companyLabel(role.data.company, role.data.client) : t('star.other')}
+    </h2>
+    {role && (
+      <p class="meta mt-1">
+        {role.data.role} · {formatDateRange(role.data.start, role.data.end, lang)} ·{' '}
+        <a href={localePath(`/experiences/#${role.slug}`, lang)} class="link-quiet">
+          {t('star.viewCv')}
+        </a>
+      </p>
+    )}
+  </header>
+  <div class="grid gap-4">
+    {stories.map((story) => (
+      <StarCard {story} {lang} />
+    ))}
+  </div>
+</section>
+
+<style>
+  .group {
+    scroll-margin-top: calc(var(--nav-h) + 16px);
+  }
+</style>

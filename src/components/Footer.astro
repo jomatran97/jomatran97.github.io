@@ -1,0 +1,38 @@
+---
+import { getProfile } from '~/lib/content';
+import { useT, type Lang } from '~/i18n';
+import { localePath } from '~/i18n/routes';
+import SocialLinks from '~/components/ui/SocialLinks.astro';
+
+const {
+  lang,
+  chromeLang,
+  analytics = false,
+  wide = false,
+} = Astro.props as {
+  lang: Lang;
+  chromeLang?: string;
+  analytics?: boolean;
+  wide?: boolean;
+};
+const t = useT(lang);
+const { data: profile } = await getProfile(lang);
+---
+
+<footer class="mt-24 border-t border-border py-10" lang={chromeLang}>
+  <div
+    class:list={[
+      'container-page flex flex-col gap-6 md:flex-row md:items-center md:justify-between',
+      { wide },
+    ]}
+  >
+    <SocialLinks {profile} {lang} />
+    <p class="meta flex flex-wrap items-center gap-x-4">
+      <a href={localePath('/rss.xml', lang)} class="link-quiet inline-flex min-h-11 items-center">
+        {t('footer.rss')}
+      </a>
+      {t('footer.copyright', { year: new Date().getFullYear() })} · {t('footer.built')}
+      {analytics && <span>· {t('footer.analytics')}</span>}
+    </p>
+  </div>
+</footer>

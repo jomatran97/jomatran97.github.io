@@ -1,0 +1,7 @@
+# Link checker config. CI runs two passes: internal links (--offline, fail) and external (warn).
+accept = [200, 204, 301, 302, 403, 429]
+max_redirects = 5
+max_retries = 2
+timeout = 20
+exclude = ['^https://www\.linkedin\.com/']
+exclude_path = ['dist/(vi/)?experiences/print/']

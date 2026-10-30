@@ -1,0 +1,38 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { getSeriesDetail, getSeriesList } from '~/lib/blog-content';
+import { getLang, langStaticPaths, localePath } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (() => langStaticPaths()) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { series, fallback } = await getSeriesList(lang);
+const details = (await Promise.all(series.map((s) => getSeriesDetail(s.slug, lang)))).filter(
+  (d) => d !== undefined,
+);
+---
+
+<BaseLayout title={t('series.title')} description={t('series.description')} {lang} {fallback}>
+  <div class="container-page">
+    <header class="page-head">
+      <h1>{t('series.title')}</h1>
+      <p class="mt-3 text-xl text-text-2">{t('series.description')}</p>
+    </header>
+    <ul class="grid max-w-[68ch] gap-5 pb-8">
+      {details.map((d) => (
+        <li class="card p-6" data-reveal>
+          <h2 class="text-2xl">
+            <a href={localePath(`/blog/series/${d.entry.slug}/`, lang)} class="text-text">
+              {d.entry.data.title}
+            </a>
+          </h2>
+          <p class="mt-2 text-text-2">{d.entry.data.description}</p>
+          <p class="meta mt-3">{t('series.progress', { n: d.published, total: d.parts.length })}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>

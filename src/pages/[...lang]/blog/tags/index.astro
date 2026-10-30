@@ -1,0 +1,38 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { countTags } from '~/lib/blog';
+import { getPosts } from '~/lib/blog-content';
+import { getLang, langStaticPaths, localePath } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (() => langStaticPaths()) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { posts, fallback } = await getPosts(lang);
+const tags = countTags(posts);
+---
+
+<BaseLayout
+  title={t('blog.allTags')}
+  description={t('blog.description')}
+  {lang}
+  {fallback}
+  noSearch
+>
+  <div class="container-page">
+    <header class="page-head">
+      <h1>{t('blog.allTags')}</h1>
+    </header>
+    <ul class="flex flex-wrap gap-3 pb-8">
+      {tags.map(({ tag, count }) => (
+        <li>
+          <a class="chip hover:no-underline" href={localePath(`/blog/tags/${tag}/`, lang)}>
+            {tag} · {count}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>

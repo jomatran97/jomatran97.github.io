@@ -1,0 +1,149 @@
+import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { z } from 'astro/zod';
+import { competencyKeys } from './content/competencies';
+import { CV_DATE_RE } from './lib/cv';
+import { skillSchema } from './lib/schemas';
+
+const loader = (base: string, pattern = '**/*.md') =>
+  glob({ pattern, base: `./src/content/${base}` });
+
+const cvDate = z.string().regex(CV_DATE_RE, 'Use YYYY or YYYY-MM');
+// Empty YAML values (`end:`) become `undefined`, meaning "Present".
+const emptyToUndefined = (v: unknown) => (v === '' || v === null ? undefined : v);
+const optionalDate = z.preprocess(emptyToUndefined, cvDate.optional());
+const optionalUrl = z.preprocess(emptyToUndefined, z.url().optional());
+const optionalText = z.preprocess(emptyToUndefined, z.string().optional());
+
+const profile = defineCollection({
+  loader: loader('profile'),
+  schema: ({ image }) =>
+    z.object({
+      name: z.string(),
+      headline: z.string(),
+      tagline: z.string(),
+      location: z.string(),
+      email: z.email(),
+      phone: z.string().regex(/^\+\d{8,15}$/, 'E.164 format, e.g. +84963378831'),
+      phoneDisplay: z.string(),
+      avatar: image().optional(),
+      yearsOfExperience: z.string(),
+      headlineMetric: z.object({ value: z.string(), label: z.string() }).optional(),
+      socials: z.object({
+        linkedin: z.url(),
+        github: z.url(),
+        x: optionalUrl,
+        bluesky: optionalUrl,
+      }),
+      spokenLanguages: z.array(z.object({ language: z.string(), proficiency: z.string() })),
+    }),
+});
+
+const experience = defineCollection({
+  loader: loader('experience'),
+  schema: ({ image }) =>
+    z.object({
+      company: z.string(),
+      client: optionalText,
+      role: z.string(),
+      location: z.string(),
+      start: cvDate,
+      end: optionalDate,
+      logo: image().optional(),
+      tech: z.array(z.string()).default([]),
+    }),
+});
+
+const skills = defineCollection({ loader: loader('skills'), schema: skillSchema });
+
+const projects = defineCollection({
+  loader: loader('projects'),
+  schema: ({ image }) =>
+    z
+      .object({
+        title: z.string(),
+        subtitle: z.string(),
+        kind: z.enum(['personal', 'work', 'open-source']),
+        summary: z.string(),
+        start: cvDate,
+        end: optionalDate,
+        tech: z.array(z.string()).default([]),
+        repo: optionalUrl,
+        demo: optionalUrl,
+        image: image().optional(),
+        featured: z.boolean().default(false),
+        inPdf: z.boolean().optional(),
+        role: optionalText,
+      })
+      .transform((d) => ({ ...d, inPdf: d.inPdf ?? d.featured })),
+});
+
+const certifications = defineCollection({
+  loader: loader('certifications'),
+  schema: ({ image }) =>
+    z.object({
+      name: z.string(),
+      issuer: z.string(),
+      year: z.string().regex(/^\d{4}$/),
+      credentialUrl: optionalUrl,
+      badge: image().optional(),
+      monogram: z.string().min(2).max(3),
+    }),
+});
+
+const star = defineCollection({
+  loader: loader('star'),
+  schema: z.object({
+    title: z.string(),
+    question: z.string(),
+    role: optionalText,
+    competencies: z.array(z.enum(competencyKeys)).min(1),
+    date: z.coerce.date(),
+    metrics: z.array(z.object({ label: z.string(), value: z.string() })).default([]),
+    featured: z.boolean().default(false),
+    /** Placeholder content to replace before publishing; shows a "Sample" marker. */
+    sample: z.boolean().default(false),
+  }),
+});
+
+const blog = defineCollection({
+  loader: loader('blog', '**/*.{md,mdx}'),
+  schema: ({ image }) =>
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      pubDate: z.coerce.date(),
+      updatedDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+      tags: z.array(z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'kebab-case')).default([]),
+      heroImage: image().optional(),
+      draft: z.boolean().default(false),
+      series: optionalText,
+      seriesPart: z.preprocess(emptyToUndefined, z.number().int().min(1).optional()),
+    }),
+});
+
+const series = defineCollection({
+  loader: loader('series'),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    parts: z.array(
+      z.object({
+        part: z.number().int().min(1),
+        title: z.string(),
+        description: z.string().optional(),
+      }),
+    ),
+  }),
+});
+
+export const collections = {
+  profile,
+  experience,
+  skills,
+  projects,
+  certifications,
+  star,
+  blog,
+  series,
+};

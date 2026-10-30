@@ -1,0 +1,50 @@
+---
+import { useT, type Lang } from '~/i18n';
+
+const { lang, href } = Astro.props as { lang: Lang; href: string };
+const t = useT(lang);
+const other: Lang = lang === 'vi' ? 'en' : 'vi';
+---
+
+<div class="lang-switch" role="group" aria-label={t('lang.label')}>
+  <span aria-current="true" lang={lang}>
+    {lang.toUpperCase()}
+  </span>
+  <a
+    {href}
+    lang={other}
+    hreflang={other}
+    aria-label={`${other.toUpperCase()} – ${other === 'vi' ? 'Tiếng Việt' : 'English'}`}
+  >
+    {other.toUpperCase()}
+  </a>
+</div>
+
+<style>
+  .lang-switch {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: var(--surface-2);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .lang-switch > * {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 4px;
+    border-radius: 999px;
+    color: var(--text-2);
+  }
+  .lang-switch > [aria-current] {
+    color: var(--text);
+    background: var(--mint-tint);
+  }
+  .lang-switch > a:hover {
+    text-decoration: none;
+    color: var(--text);
+  }
+</style>

@@ -1,0 +1,78 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import StarGroup from '~/components/star/StarGroup.astro';
+import CompetencyFilter from '~/components/star/CompetencyFilter.astro';
+import { getLocalized } from '~/lib/content';
+import { sortRoles } from '~/lib/cv';
+import { groupStories } from '~/lib/star';
+import { competencyKeys } from '~/content/competencies';
+import { getLang, langStaticPaths } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (() => langStaticPaths()) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { items: stories, fallback } = await getLocalized('star', lang);
+const { items: roles, fallback: rolesFallback } = await getLocalized('experience', lang);
+const sortedRoles = sortRoles(roles.map((r) => ({ ...r, start: r.data.start, end: r.data.end })));
+const groups = groupStories(stories, sortedRoles);
+const present = competencyKeys.filter((c) => stories.some((s) => s.data.competencies.includes(c)));
+const legend = [
+  ['s', t('star.situation')],
+  ['t', t('star.task')],
+  ['a', t('star.action')],
+  ['r', t('star.result')],
+] as const;
+---
+
+<BaseLayout
+  title={t('star.title')}
+  description={t('star.description')}
+  {lang}
+  fallback={fallback || (rolesFallback && groups.some((g) => g.role))}
+>
+  <div class="container-page">
+    <header class="page-head">
+      <h1>{t('star.title')}</h1>
+      <p class="mt-3 max-w-[60ch] text-xl text-text-2">{t('star.intro')}</p>
+      <ul class="mt-5 flex flex-wrap items-center gap-2" aria-label={t('star.legend')}>
+        {legend.map(([key, label]) => (
+          <li class={`chip legend legend-${key}`}>{label}</li>
+        ))}
+      </ul>
+      <div class="mt-6">
+        <CompetencyFilter {lang} {present} />
+      </div>
+    </header>
+
+    <div class="grid gap-16 pb-8">
+      {groups.map((g) => (
+        <StarGroup id={g.id} role={g.role} stories={g.stories} {lang} />
+      ))}
+    </div>
+    <p id="star-empty" class="py-8 text-center text-xl" hidden>
+      {t('star.empty')}
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  .legend-s {
+    background: var(--mint-tint);
+  }
+  .legend-t {
+    background: var(--sky-tint);
+  }
+  .legend-a {
+    background: var(--butter-tint);
+  }
+  .legend-r {
+    background: linear-gradient(90deg, var(--mint-tint), var(--sky-tint));
+  }
+</style>
+
+<script>
+  import '~/scripts/star';
+</script>

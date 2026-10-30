@@ -1,0 +1,59 @@
+---
+import { Icon } from 'astro-icon/components';
+import { useT, type Lang } from '~/i18n';
+
+interface Props {
+  type?: 'note' | 'tip' | 'warning';
+  /** Language of the label; posts in Vietnamese pass `lang="vi"`. */
+  lang?: Lang;
+}
+const { type = 'note', lang = 'en' } = Astro.props;
+const t = useT(lang);
+const icon = { note: 'info', tip: 'lightbulb', warning: 'triangle-alert' }[type];
+---
+
+<div class={`callout callout-${type}`} role="note">
+  <Icon name={`lucide:${icon}`} size={22} class="callout-icon" />
+  <div>
+    <p class="callout-title">{t(`callout.${type}`)}</p>
+    <slot />
+  </div>
+</div>
+
+<style>
+  .callout {
+    display: flex;
+    gap: 12px;
+    margin-block: 1.5em;
+    padding: 16px 20px;
+    border-radius: 16px;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .callout :global(p) {
+    margin: 0;
+  }
+  .callout :global(p + p) {
+    margin-top: 0.5em;
+  }
+  .callout :global(.callout-icon) {
+    flex: none;
+    margin-top: 2px;
+  }
+  .callout-title {
+    font-weight: 600;
+  }
+  .callout-note {
+    background: var(--sky-tint);
+  }
+  .callout-tip {
+    background: var(--mint-tint);
+  }
+  /* Butter is pale, so the warning gets a --text border for contrast. */
+  .callout-warning {
+    background: var(--butter-tint);
+    border: 2px solid var(--text);
+  }
+</style>

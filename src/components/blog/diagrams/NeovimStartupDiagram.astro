@@ -1,0 +1,345 @@
+---
+import type { Lang } from '~/i18n';
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+
+// File and plugin names stay as they are; descriptive labels and captions are translated.
+const text = {
+  en: {
+    title: 'How the Neovim config starts',
+    desc: 'init.lua enables vim.loader, then loads core settings and lazy.nvim. lazy.nvim imports the plugin files, which set up language servers, completion, formatting and linting.',
+    caption:
+      "Startup flow: core settings load first, then lazy.nvim loads plugins only when they're needed.",
+    steps: [
+      'init.lua turns on vim.loader.',
+      'core/ loads options, keymaps and autocmds.',
+      'lazy.lua bootstraps lazy.nvim with lazy = true and imports ryanparker.plugins.',
+      'plugins/*.lua holds 12 topic files: ui, navigation, editing, git, lsp, completion, formatting, linting, treesitter, data, dev and extras.',
+      'These set up Mason with the language servers, blink.cmp for completion, conform for formatting on save and nvim-lint for linting. Java is started by ftplugin/java.lua, covered in Part 4.',
+    ],
+    topic: '12 topic files',
+    bootstrap: 'bootstrap, lazy = true',
+    completion: 'completion',
+    onSave: 'format on save',
+    linting: 'linting',
+    java: 'jdtls via ftplugin/java.lua → Part 4',
+  },
+  vi: {
+    title: 'Cách cấu hình Neovim khởi động',
+    desc: 'init.lua bật vim.loader, rồi nạp các thiết lập lõi và lazy.nvim. lazy.nvim nhập các tệp plugin, nơi thiết lập language server, gợi ý mã, định dạng và linting.',
+    caption:
+      'Luồng khởi động: các thiết lập lõi được nạp trước, sau đó lazy.nvim chỉ nạp plugin khi cần.',
+    steps: [
+      'init.lua bật vim.loader.',
+      'core/ nạp options, keymaps và autocmds.',
+      'lazy.lua tự cài lazy.nvim với lazy = true và nhập ryanparker.plugins.',
+      'plugins/*.lua gồm 12 tệp theo chủ đề: ui, navigation, editing, git, lsp, completion, formatting, linting, treesitter, data, dev và extras.',
+      'Các tệp này thiết lập Mason cùng các language server, blink.cmp cho gợi ý mã, conform để định dạng khi lưu và nvim-lint cho linting. Java được khởi động bởi ftplugin/java.lua, sẽ nói ở Phần 4.',
+    ],
+    topic: '12 tệp theo chủ đề',
+    bootstrap: 'tự cài, lazy = true',
+    completion: 'gợi ý mã',
+    onSave: 'định dạng khi lưu',
+    linting: 'linting',
+    java: 'jdtls qua ftplugin/java.lua → Phần 4',
+  },
+}[lang];
+---
+
+<figure class="diagram">
+  <!-- Horizontal layout, shown from 768px. -->
+  <svg
+    class="diagram-h"
+    viewBox="0 0 600 440"
+    role="img"
+    aria-labelledby="nvim-h-title nvim-h-desc"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <title id="nvim-h-title">{text.title}</title>
+    <desc id="nvim-h-desc">{text.desc}</desc>
+    <defs>
+      <marker
+        id="nvim-h-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="7"
+        markerHeight="7"
+        orient="auto"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
+      </marker>
+    </defs>
+    <g class="links" marker-end="url(#nvim-h-arrow)">
+      <path d="M150 94 C170 94 170 52 188 52" />
+      <path d="M150 94 C170 94 170 142 188 142" />
+      <path d="M395 174 V204" />
+      <path d="M300 288 C300 312 71 308 71 330" />
+      <path d="M340 288 C340 312 223 308 223 330" />
+      <path d="M440 288 C440 312 375 308 375 330" />
+      <path d="M500 288 C500 312 528 308 528 330" />
+    </g>
+    <g class="node surface">
+      <rect x="0" y="62" width="150" height="64" rx="14" />
+      <text x="75" y="88" class="t-strong">
+        init.lua
+      </text>
+      <text x="75" y="110">
+        vim.loader.enable()
+      </text>
+    </g>
+    <g class="node mint">
+      <rect x="190" y="20" width="410" height="64" rx="14" />
+      <text x="395" y="46" class="t-strong">
+        core/
+      </text>
+      <text x="395" y="68">
+        options · keymaps · autocmds
+      </text>
+    </g>
+    <g class="node sky">
+      <rect x="190" y="110" width="410" height="64" rx="14" />
+      <text x="395" y="136" class="t-strong">
+        lazy.lua
+      </text>
+      <text x="395" y="158">
+        lazy.nvim ({text.bootstrap})
+      </text>
+    </g>
+    <g class="node butter">
+      <rect x="190" y="206" width="410" height="82" rx="14" />
+      <text x="395" y="228" class="t-strong">
+        plugins/*.lua ({text.topic})
+      </text>
+      <text x="395" y="248">
+        ui · navigation · editing · git · lsp
+      </text>
+      <text x="395" y="266">
+        completion · formatting · linting
+      </text>
+      <text x="395" y="284">
+        treesitter · data · dev · extras
+      </text>
+    </g>
+    <g class="node surface">
+      <rect x="0" y="332" width="142" height="56" rx="14" />
+      <text x="71" y="356" class="t-strong">
+        Mason → LSP
+      </text>
+      <text x="71" y="376">
+        vim.lsp.enable
+      </text>
+      <rect x="152" y="332" width="142" height="56" rx="14" />
+      <text x="223" y="356" class="t-strong">
+        blink.cmp
+      </text>
+      <text x="223" y="376">
+        {text.completion}
+      </text>
+      <rect x="304" y="332" width="142" height="56" rx="14" />
+      <text x="375" y="356" class="t-strong">
+        conform
+      </text>
+      <text x="375" y="376">
+        {text.onSave}
+      </text>
+      <rect x="456" y="332" width="144" height="56" rx="14" />
+      <text x="528" y="356" class="t-strong">
+        nvim-lint
+      </text>
+      <text x="528" y="376">
+        {text.linting}
+      </text>
+    </g>
+    <text x="300" y="418" class="t-note">
+      {text.java}
+    </text>
+  </svg>
+
+  <!-- Vertical layout, shown below 768px. -->
+  <svg
+    class="diagram-v"
+    viewBox="0 0 300 610"
+    role="img"
+    aria-labelledby="nvim-v-title nvim-v-desc"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <title id="nvim-v-title">{text.title}</title>
+    <desc id="nvim-v-desc">{text.desc}</desc>
+    <defs>
+      <marker
+        id="nvim-v-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="7"
+        markerHeight="7"
+        orient="auto"
+      >
+        <path d="M0 0 L10 5 L0 10 z" class="arrow-head" />
+      </marker>
+    </defs>
+    <g class="links" marker-end="url(#nvim-v-arrow)">
+      <path d="M150 58 V82" />
+      <path d="M150 140 V164" />
+      <path d="M150 222 V246" />
+      <path d="M75 396 V424" />
+      <path d="M225 396 V424" />
+    </g>
+    <g class="node surface">
+      <rect x="0" y="0" width="300" height="58" rx="14" />
+      <text x="150" y="24" class="t-strong">
+        init.lua
+      </text>
+      <text x="150" y="44">
+        vim.loader.enable()
+      </text>
+    </g>
+    <g class="node mint">
+      <rect x="0" y="84" width="300" height="56" rx="14" />
+      <text x="150" y="110" class="t-strong">
+        core/
+      </text>
+      <text x="150" y="130">
+        options · keymaps · autocmds
+      </text>
+    </g>
+    <g class="node sky">
+      <rect x="0" y="166" width="300" height="56" rx="14" />
+      <text x="150" y="192" class="t-strong">
+        lazy.lua
+      </text>
+      <text x="150" y="212">
+        lazy.nvim ({text.bootstrap})
+      </text>
+    </g>
+    <g class="node butter">
+      <rect x="0" y="248" width="300" height="148" rx="14" />
+      <text x="150" y="276" class="t-strong">
+        plugins/*.lua
+      </text>
+      <text x="150" y="298">
+        {text.topic}
+      </text>
+      <text x="150" y="324">
+        ui · navigation · editing
+      </text>
+      <text x="150" y="346">
+        git · lsp · completion
+      </text>
+      <text x="150" y="368">
+        formatting · linting
+      </text>
+      <text x="150" y="390">
+        treesitter · data · dev · extras
+      </text>
+    </g>
+    <g class="node surface">
+      <rect x="0" y="426" width="144" height="56" rx="14" />
+      <text x="72" y="450" class="t-strong">
+        Mason → LSP
+      </text>
+      <text x="72" y="470">
+        vim.lsp.enable
+      </text>
+      <rect x="156" y="426" width="144" height="56" rx="14" />
+      <text x="228" y="450" class="t-strong">
+        blink.cmp
+      </text>
+      <text x="228" y="470">
+        {text.completion}
+      </text>
+      <rect x="0" y="492" width="144" height="56" rx="14" />
+      <text x="72" y="516" class="t-strong">
+        conform
+      </text>
+      <text x="72" y="536">
+        {text.onSave}
+      </text>
+      <rect x="156" y="492" width="144" height="56" rx="14" />
+      <text x="228" y="516" class="t-strong">
+        nvim-lint
+      </text>
+      <text x="228" y="536">
+        {text.linting}
+      </text>
+    </g>
+    <text x="150" y="580" class="t-note">
+      {text.java}
+    </text>
+  </svg>
+
+  <ol class="sr-only">
+    {text.steps.map((s) => (
+      <li>{s}</li>
+    ))}
+  </ol>
+  <figcaption>{text.caption}</figcaption>
+</figure>
+
+<style>
+  .diagram {
+    margin-block: 2em;
+    font-family: var(--font-sans);
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    font-size: 15px;
+  }
+  .diagram-h {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .diagram-h {
+      display: block;
+    }
+    .diagram-v {
+      display: none;
+    }
+  }
+  text {
+    fill: var(--text);
+    text-anchor: middle;
+  }
+  .t-strong {
+    font-weight: 600;
+  }
+  .t-note {
+    fill: var(--text-2);
+  }
+  .node rect {
+    stroke: var(--border);
+    stroke-width: 1;
+  }
+  .surface rect {
+    fill: var(--surface);
+  }
+  .mint rect {
+    fill: var(--mint-tint);
+  }
+  .sky rect {
+    fill: var(--sky-tint);
+  }
+  .butter rect {
+    fill: var(--butter-tint);
+  }
+  .links path {
+    fill: none;
+    stroke: var(--text-2);
+    stroke-width: 1.5;
+  }
+  .arrow-head {
+    fill: var(--text-2);
+  }
+  figcaption {
+    margin-top: 12px;
+    color: var(--text-2);
+    font-size: 0.9375rem;
+    text-align: center;
+  }
+</style>

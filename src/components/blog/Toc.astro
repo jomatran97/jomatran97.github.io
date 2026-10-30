@@ -1,0 +1,68 @@
+---
+import { useT, type Lang } from '~/i18n';
+import TocList from './TocList.astro';
+
+interface Props {
+  lang: Lang;
+  headings: { depth: number; slug: string; text: string }[];
+}
+const { lang, headings } = Astro.props;
+const t = useT(lang);
+const items = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{items.length > 0 && (
+  <>
+    <details class="toc-narrow">
+      <summary>{t('blog.toc')}</summary>
+      <TocList headings={items} />
+    </details>
+    <nav class="toc-side" aria-label={t('blog.toc')}>
+      <p class="title">{t('blog.toc')}</p>
+      <TocList headings={items} />
+    </nav>
+  </>
+)}
+
+<style>
+  details,
+  nav {
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+  }
+  details {
+    margin-bottom: 24px;
+    padding: 4px 20px;
+    border-radius: 16px;
+    background: var(--surface-2);
+  }
+  summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .title {
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .toc-narrow {
+    grid-area: tocn;
+  }
+  .toc-side {
+    display: none;
+    grid-area: toc;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--nav-h) + 24px);
+  }
+  @media (min-width: 1024px) {
+    .toc-narrow {
+      display: none;
+    }
+    .toc-side {
+      display: block;
+    }
+  }
+</style>

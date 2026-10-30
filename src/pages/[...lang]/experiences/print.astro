@@ -1,0 +1,130 @@
+---
+import type { GetStaticPaths } from 'astro';
+import PrintLayout from '~/layouts/PrintLayout.astro';
+import PrintSkillsTable from '~/components/cv/PrintSkillsTable.astro';
+import { getLocalized, getProfile, render } from '~/lib/content';
+import { companyLabel, displayUrl, formatDateRange, sortProjects, sortRoles } from '~/lib/cv';
+import { getLang, langStaticPaths } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (() => langStaticPaths()) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { entry, data: p, fallback: f1 } = await getProfile(lang);
+const { Content: Summary } = await render(entry);
+const { items: roles, fallback: f2 } = await getLocalized('experience', lang);
+const { items: allProjects, fallback: f3 } = await getLocalized('projects', lang);
+const { items: skills, fallback: f4 } = await getLocalized('skills', lang);
+const { items: certs, fallback: f5 } = await getLocalized('certifications', lang);
+
+const experience = sortRoles(roles.map((r) => ({ ...r, start: r.data.start, end: r.data.end })));
+const projects = sortProjects(
+  allProjects
+    .filter((x) => x.data.inPdf)
+    .map((x) => ({ ...x, start: x.data.start, end: x.data.end, featured: x.data.featured })),
+);
+const sortedCerts = [...certs].sort((a, b) => b.data.year.localeCompare(a.data.year));
+const bodies = new Map(
+  await Promise.all(
+    [...experience, ...projects].map(async (e) => [e.id, (await render(e)).Content] as const),
+  ),
+);
+---
+
+<PrintLayout title={`${p.name} — ${p.headline} CV`} {lang} fallback={f1 || f2 || f3 || f4 || f5}>
+  <div class="cv">
+    <header class="top">
+      <div>
+        <h1>{p.name}</h1>
+        <p>
+          <strong>{p.headline}</strong> — {p.tagline}
+        </p>
+        <p>{p.location}</p>
+      </div>
+      <div class="contact">
+        <p>
+          {t('cv.email')}: <a href={`mailto:${p.email}`}>{p.email}</a>
+        </p>
+        <p>
+          {t('cv.phone')}: <a href={`tel:${p.phone}`}>{p.phoneDisplay}</a>
+        </p>
+        <p>
+          {t('cv.linkedin')}: <a href={p.socials.linkedin}>{displayUrl(p.socials.linkedin)}</a>
+        </p>
+        <p>
+          {t('cv.github')}: <a href={p.socials.github}>{displayUrl(p.socials.github)}</a>
+        </p>
+      </div>
+    </header>
+
+    <section>
+      <h2>{t('cv.summary')}</h2>
+      <Summary />
+    </section>
+
+    <section>
+      <h2>{t('cv.experience')}</h2>
+      {experience.map((r) => {
+        const Body = bodies.get(r.id)!;
+        return (
+          <div class="entry">
+            <div class="row">
+              <strong>{companyLabel(r.data.company, r.data.client)}</strong>
+              <span>{r.data.location}</span>
+            </div>
+            <div class="row sub">
+              <span>{r.data.role}</span>
+              <span>{formatDateRange(r.data.start, r.data.end, lang)}</span>
+            </div>
+            <div class="bullets">
+              <Body />
+            </div>
+          </div>
+        );
+      })}
+    </section>
+
+    {projects.length > 0 && (
+      <section>
+        <h2>{t('cv.print.projects')}</h2>
+        {projects.map((x) => {
+          const Body = bodies.get(x.id)!;
+          return (
+            <div class="entry">
+              <div class="row">
+                <strong>{x.data.title}</strong>
+                <span>{formatDateRange(x.data.start, x.data.end, lang)}</span>
+              </div>
+              <div class="row sub">
+                <span>{x.data.subtitle}</span>
+              </div>
+              <div class="bullets">
+                <Body />
+              </div>
+            </div>
+          );
+        })}
+      </section>
+    )}
+
+    <section>
+      <h2>{t('cv.print.skills')}</h2>
+      <PrintSkillsTable
+        {skills}
+        languages={{ label: t('cv.print.languages'), items: p.spokenLanguages }}
+      />
+    </section>
+
+    <section>
+      <h2>{t('cv.print.certifications')}</h2>
+      <ul class="certs">
+        {sortedCerts.map((c) => (
+          <li>
+            <strong>{c.data.name}</strong> ({c.data.year})
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+</PrintLayout>

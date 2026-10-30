@@ -1,0 +1,61 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import SeriesCard from '~/components/blog/SeriesCard.astro';
+import { getSeriesDetail, getSeriesList } from '~/lib/blog-content';
+import { render } from '~/lib/content';
+import { getLang, langStaticPaths, localePath, switchTarget } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (async () => {
+  const paths = [];
+  for (const { params } of langStaticPaths()) {
+    const { series } = await getSeriesList(getLang(params.lang));
+    for (const s of series) paths.push({ params: { ...params, slug: s.slug } });
+  }
+  return paths;
+}) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const detail = (await getSeriesDetail(Astro.params.slug!, lang))!;
+const { entry, parts, published } = detail;
+const { Content } = await render(entry);
+---
+
+<BaseLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  {lang}
+  fallback={entry.contentLang !== lang}
+  langs={entry.available}
+  switchHref={switchTarget(entry.available, lang, `/blog/series/${entry.slug}/`, '/blog/series/')}
+>
+  <div class="container-page">
+    <header class="page-head">
+      <h1>{entry.data.title}</h1>
+      <p class="mt-3 max-w-[60ch] text-xl text-text-2">{entry.data.description}</p>
+      <p class="meta mt-3">{t('series.progress', { n: published, total: parts.length })}</p>
+      <div class="mt-4 max-w-[68ch]">
+        <Content />
+      </div>
+    </header>
+    <ol class="grid max-w-[68ch] gap-5 pb-8">
+      {parts.map((p) => (
+        <SeriesCard
+          {lang}
+          part={p.part}
+          title={p.post?.data.title ?? p.title}
+          description={p.post?.data.description ?? p.description}
+          post={p.post}
+          minutes={p.post ? p.post.minutes : undefined}
+        />
+      ))}
+    </ol>
+    <p class="pb-8">
+      <a href={localePath('/blog/', lang)} class="link-quiet">
+        ← {t('blog.back')}
+      </a>
+    </p>
+  </div>
+</BaseLayout>
