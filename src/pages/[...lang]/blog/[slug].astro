@@ -1,0 +1,43 @@
+---
+import type { GetStaticPaths } from 'astro';
+import PostLayout from '~/layouts/PostLayout.astro';
+import { adjacentPosts } from '~/lib/blog';
+import { getPosts, getSeriesDetail } from '~/lib/blog-content';
+import { render } from '~/lib/content';
+import { getLang, langStaticPaths } from '~/i18n/routes';
+
+export const getStaticPaths = (async () => {
+  const paths = [];
+  for (const { params } of langStaticPaths()) {
+    const { posts } = await getPosts(getLang(params.lang));
+    for (const post of posts)
+      paths.push({ params: { ...params, slug: post.slug }, props: { post } });
+  }
+  return paths;
+}) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const { post } = Astro.props;
+const { Content, headings } = await render(post);
+const { posts } = await getPosts(lang);
+const detail = post.data.series ? await getSeriesDetail(post.data.series, lang) : undefined;
+const { prev, next } = adjacentPosts(posts, post.slug);
+---
+
+<PostLayout
+  {post}
+  {lang}
+  minutes={post.minutes}
+  {headings}
+  series={
+    detail && {
+      slug: detail.entry.slug,
+      title: detail.entry.data.title,
+      parts: detail.parts,
+    }
+  }
+  {prev}
+  {next}
+>
+  <Content />
+</PostLayout>

@@ -1,0 +1,172 @@
+---
+import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
+import interVietnamese from '@fontsource-variable/inter/files/inter-vietnamese-wght-normal.woff2?url';
+import '~/styles/global.css';
+import GlassNav from '~/components/nav/GlassNav.astro';
+import Footer from '~/components/Footer.astro';
+import SearchModal from '~/components/search/SearchModal.astro';
+import { htmlLang, useT, type Lang } from '~/i18n';
+import { localePath, stripLang, switchLangPath } from '~/i18n/routes';
+import { viPageHasContent } from '~/lib/vi-coverage';
+
+interface Props {
+  title: string;
+  description: string;
+  lang: Lang;
+  /** True when a `/vi/` page shows English content: shows the banner and reports `lang="en"`. */
+  fallback?: boolean;
+  /** Skips canonical/hreflang and search indexing (404). */
+  noindex?: boolean;
+  /** Languages in which this page really exists (defaults to EN + VI, or EN only for fallbacks). */
+  langs?: Lang[];
+  ogType?: 'website' | 'article';
+  /** Marks the page as searchable (Pagefind) and sets its result type. Unset = not indexed. */
+  searchType?: 'blog' | 'star' | 'cv' | 'projects';
+  /** Explicitly excluded from the search index (tag pages). */
+  noSearch?: boolean;
+  /** schema.org JSON-LD for the page. */
+  jsonLd?: object;
+  /** Nav and footer use the 1520px Home container (Home only). */
+  wide?: boolean;
+  /** Overrides the language switch target (e.g. a section index when no translation exists). */
+  switchHref?: string;
+}
+const {
+  title,
+  description,
+  lang,
+  fallback = false,
+  noindex = false,
+  // hreflang must agree with the sitemap: only list /vi/ when it has real Vietnamese content.
+  langs = fallback || !viPageHasContent(localePath(stripLang(Astro.url.pathname), 'vi'))
+    ? ['en']
+    : ['en', 'vi'],
+  ogType = 'website',
+  searchType,
+  noSearch = false,
+  jsonLd,
+  wide = false,
+  switchHref,
+} = Astro.props;
+const t = useT(lang);
+const contentLang: Lang = fallback ? 'en' : lang;
+const path = stripLang(Astro.url.pathname);
+const site = Astro.site!;
+const url = (p: string) => new URL(p, site).href;
+// A fallback page has no real translation, so it points search engines at the English page.
+const canonical = url(fallback ? path : Astro.url.pathname);
+const fullTitle = title === t('meta.siteName') ? title : `${title} · ${t('meta.siteName')}`;
+const chromeLang = fallback ? htmlLang(lang) : undefined; // UI chrome stays in the UI language
+const buildId = process.env.GITHUB_SHA ?? 'dev';
+const ogImage = url('/og-default.png');
+const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN;
+const analytics = import.meta.env.PROD && !!beaconToken;
+// Fallback pages repeat English content, so only real translations are indexed for search.
+const indexed = !!searchType && !fallback && !noindex && !noSearch;
+---
+
+<!doctype html>
+<html lang={htmlLang(contentLang)}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="build-id" content={buildId} />
+    {!noindex && <link rel="canonical" href={canonical} />}
+    {!noindex &&
+      langs.map((l) => <link rel="alternate" hreflang={l} href={url(localePath(path, l))} />)}
+    {!noindex && <link rel="alternate" hreflang="x-default" href={url(path)} />}
+    {noindex && <meta name="robots" content="noindex" />}
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title={t('meta.siteName')}
+      href={localePath('/rss.xml', lang)}
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    {jsonLd && (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')}
+      />
+    )}
+    <link rel="preload" as="font" type="font/woff2" href={interLatin} crossorigin />
+    {lang === 'vi' && (
+      <link rel="preload" as="font" type="font/woff2" href={interVietnamese} crossorigin />
+    )}
+    <slot name="head" />
+    <script is:inline>
+      // Runs before first paint so the page never flashes the wrong theme.
+      (function () {
+        const root = document.documentElement;
+        let pref = 'system';
+        try {
+          pref = localStorage.getItem('theme') || 'system';
+        } catch {
+          /* storage blocked: follow the system theme */
+        }
+        if (pref !== 'light' && pref !== 'dark') pref = 'system';
+        root.classList.add('js');
+        root.dataset.pref = pref;
+        if (pref !== 'system') root.dataset.theme = pref;
+      })();
+    </script>
+  </head>
+  <body>
+    <a
+      href="#main"
+      lang={chromeLang}
+      class="sr-only-focusable btn btn-primary fixed top-2 left-2 z-[60]"
+    >
+      {t('nav.skip')}
+    </a>
+    <GlassNav
+      {lang}
+      {chromeLang}
+      {wide}
+      switchHref={switchHref ?? switchLangPath(Astro.url.pathname, lang === 'vi' ? 'en' : 'vi')}
+    />
+    {fallback && (
+      <div
+        role="note"
+        class="bg-butter-tint py-3 text-center text-sm font-medium"
+        lang={chromeLang}
+      >
+        {t('banner.englishOnly')}
+      </div>
+    )}
+    <main
+      id="main"
+      data-pagefind-body={indexed ? '' : undefined}
+      data-pagefind-meta={indexed ? `type:${searchType}` : undefined}
+      data-pagefind-ignore={noindex || noSearch ? '' : undefined}
+    >
+      <slot />
+    </main>
+    <Footer {lang} {chromeLang} {analytics} {wide} />
+    <SearchModal {lang} {chromeLang} />
+    {analytics && (
+      <script
+        is:inline
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon={JSON.stringify({ token: beaconToken })}
+      />
+    )}
+    <script>
+      import '~/scripts/reveal';
+      import '~/scripts/copy-code';
+      import '~/scripts/search';
+    </script>
+  </body>
+</html>

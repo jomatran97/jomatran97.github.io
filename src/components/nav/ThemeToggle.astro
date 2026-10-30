@@ -1,0 +1,38 @@
+---
+import { Icon } from 'astro-icon/components';
+import { useT, type Lang } from '~/i18n';
+
+const { lang } = Astro.props as { lang: Lang };
+const t = useT(lang);
+---
+
+<button
+  type="button"
+  class="icon-btn theme-toggle"
+  data-theme-toggle
+  data-label={t('theme.label')}
+  data-system={t('theme.system')}
+  data-light={t('theme.light')}
+  data-dark={t('theme.dark')}
+  aria-label={`${t('theme.label')}: ${t('theme.system')}`}
+  title={`${t('theme.label')}: ${t('theme.system')}`}
+>
+  <Icon name="lucide:monitor" class="i-system" size={20} />
+  <Icon name="lucide:sun" class="i-light" size={20} />
+  <Icon name="lucide:moon" class="i-dark" size={20} />
+</button>
+
+<style>
+  .theme-toggle :global(svg) {
+    display: none;
+  }
+  :global(:root:not([data-pref='light']):not([data-pref='dark'])) .i-system,
+  :global(:root[data-pref='light']) .i-light,
+  :global(:root[data-pref='dark']) .i-dark {
+    display: block;
+  }
+</style>
+
+<script>
+  import '~/scripts/theme';
+</script>

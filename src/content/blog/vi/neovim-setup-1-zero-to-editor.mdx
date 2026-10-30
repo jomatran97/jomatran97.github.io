@@ -1,0 +1,323 @@
+---
+title: 'Hướng dẫn thiết lập Neovim, Phần 1: từ con số 0 đến trình soạn thảo chạy được'
+description: 'Cài công cụ, chạy cấu hình Neovim 0.12 của tôi trên macOS và kiểm tra mọi thứ hoạt động, trong khoảng 15 phút.'
+pubDate: 2026-10-30
+tags: ['neovim', 'dotfiles', 'macos', 'developer-tools']
+series: 'neovim-setup-guide'
+seriesPart: 1
+---
+
+import Callout from '~/components/blog/Callout.astro';
+import NeovimStartupDiagram from '~/components/blog/diagrams/NeovimStartupDiagram.astro';
+
+Hướng dẫn này đưa bạn từ con số 0 đến một Neovim chạy được trên macOS, dùng cấu hình nhỏ gọn tôi xây dựng cho công việc pha trộn giữa web, kỹ thuật dữ liệu và SRE: Java, Python, dbt/SQL, Terraform, Bash, CloudFormation/YAML, JSON, Docker và các tệp frontend. Bạn cần **Neovim 0.12 trở lên**, và bước 1 sẽ kiểm tra điều đó.
+
+Tôi viết bài này vì các bản phân phối lớn như LazyVim hay NvChad làm giúp bạn rất nhiều thứ, và rồi khó biết phần nào làm gì. Cấu hình này thì ngược lại: mỗi chủ đề một tệp Lua, plugin chỉ được nạp khi cần, và không có gì tôi không giải thích được. Qua năm phần, bạn sẽ xây dựng nó từng bước. Phần đầu này đảm bảo mọi thứ cài được và khởi động được. Bạn có thể xem cả chuỗi bài trên [trang chuỗi bài viết](/vi/blog/series/neovim-setup-guide/).
+
+<Callout type="note" lang="vi">
+  **Đã thử với:** Neovim 0.12, macOS, dotfiles commit `2101fb4`. **Nguồn:**
+  [github.com/jomatran97/dotfiles](https://github.com/jomatran97/dotfiles) (thư mục `nvim/`).
+</Callout>
+
+## Bạn sẽ có gì khi kết thúc
+
+Khi xong phần này, bạn sẽ có:
+
+- **lazy.nvim** làm trình quản lý plugin, quản lý 49 plugin được nạp lười (lazy-load) theo mặc định.
+- **oil.nvim** làm trình quản lý tệp hoạt động như một buffer bình thường.
+- **telescope.nvim** làm công cụ tìm kiếm mờ cho tệp, văn bản và buffer.
+- Các language server do **Mason** cài giúp bạn.
+- **Định dạng khi lưu** với conform.nvim, và **linting** với nvim-lint.
+- Tô màu cú pháp bằng **Treesitter**.
+- **Git signs** ở lề, gợi ý **which-key** khi bạn nhấn một tiền tố phím, và giao diện **catppuccin mocha**.
+
+Các ngôn ngữ sẽ được thiết lập đầy đủ ở Phần 2. Phần 1 đảm bảo mọi thứ cài được và khởi động được.
+
+Đôi lời về "nạp lười" (lazy-load), vì nó giải thích phần lớn cảm giác khi dùng cấu hình này. Một plugin thông thường được nạp mỗi lần Neovim khởi động, nên mỗi plugin đều làm tăng thời gian khởi động. Một plugin nạp lười thì chờ đến khi bạn dùng nó: nhấn một phím đã gán, chạy một lệnh hoặc mở một loại tệp nhất định. Nhờ vậy, một cấu hình có từng này plugin vẫn có thể khởi động trong chớp mắt. Cái giá là một plugin bị lỗi có thể chỉ lộ ra khi bạn lần đầu dùng đến nó, vì thế các bước kiểm tra ở bước 4 rất quan trọng.
+
+Toàn bộ hướng dẫn mất khoảng 15 phút nếu mạng của bạn nhanh. Phần lớn thời gian là chờ Homebrew và lần khởi chạy đầu tiên.
+
+## Trước khi bắt đầu
+
+Bạn cần macOS với [Homebrew](https://brew.sh). Ngoài ra:
+
+- **Neovim 0.12 trở lên.** Kiểm tra phiên bản bạn đang có:
+
+  ```sh
+  $ nvim --version
+  ```
+
+  Nếu cũ hơn hoặc chưa có, chạy `brew install neovim` (hoặc `brew upgrade neovim`).
+
+<Callout type="warning" lang="vi">
+  Neovim 0.11 trở xuống sẽ lỗi với cấu hình này. Cấu hình đặt tùy chọn `pumborder` chỉ có từ 0.12
+  và nạp undotree tích hợp bằng `packadd nvim.undotree`.
+</Callout>
+
+- **Một Nerd Font** được đặt trong terminal, ví dụ FiraCode Nerd Font:
+
+  ```sh
+  $ brew install --cask font-fira-code-nerd-font
+  ```
+
+  Nếu không có, các biểu tượng sẽ hiện thành ô vuông trống.
+
+- **Xcode Command Line Tools** (`xcode-select --install`). Extension `fzf-native` của Telescope được build bằng `make`.
+- **Python 3.10 trở lên**, nếu bạn muốn Mason cài `sqlfluff`. Với phiên bản cũ hơn, cấu hình sẽ bỏ qua nó.
+
+## Bước 1: cài các công cụ trên máy
+
+Neovim gọi nhiều chương trình trên máy bạn. Cài chúng bằng Homebrew và pipx:
+
+```sh
+$ brew install neovim git curl ripgrep fd tree-sitter node python pipx openjdk terraform shellcheck shfmt tflint cfn-lint
+$ pipx install dbt-core
+$ pipx install sqlfluff
+```
+
+Đây là lý do mỗi công cụ có mặt:
+
+- `git` và `curl`: lazy.nvim clone plugin bằng git, và Mason tải công cụ.
+- `ripgrep` và `fd`: telescope dùng chúng để tìm nội dung tệp và tên tệp.
+- `tree-sitter`: CLI dùng để build các parser của Treesitter.
+- `node`: nhiều language server là chương trình JavaScript, và `prettier` cũng cần nó.
+- `python` và `pipx`: `dbt-core` và `sqlfluff` nằm trong môi trường cô lập riêng.
+- `openjdk`: chỉ cần cho Java, sẽ nói ở Phần 4.
+- `terraform`, `shellcheck`, `shfmt`, `tflint` và `cfn-lint`: công cụ định dạng và linting cho Terraform, Bash và CloudFormation, dùng ở Phần 2.
+
+Có thể cài thêm `lazygit` để có giao diện Git, mở bằng <kbd>Space</kbd> <kbd>g</kbd> <kbd>g</kbd>:
+
+```sh
+$ brew install lazygit
+```
+
+Nếu một lệnh ở bước này bị lỗi, đừng đi tiếp. Một công cụ bị thiếu bây giờ sẽ thành một lỗi khó hiểu về sau, và sửa nó chỉ mất một phút. Chạy `brew doctor` nếu chính Homebrew báo lỗi, rồi chạy lại lệnh đã lỗi khi vấn đề được khắc phục. Homebrew bỏ qua những gì đã được cài, nên chạy lại lệnh là an toàn.
+
+## Bước 2: lấy cấu hình
+
+Có ba cách để lấy cấu hình. Chọn một.
+
+### A. Toàn bộ repo dotfiles
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ cd ~/dotfiles
+$ ./install.sh
+```
+
+<Callout type="warning" lang="vi">
+  `install.sh` liên kết nhiều thứ hơn Neovim: nó còn thiết lập zsh, tmux, alacritty, yabai, skhd và
+  starship. Bất cứ thứ gì đang chiếm chỗ sẽ được chuyển sang `<đường dẫn>.bak.<timestamp>`, nên
+  không có gì bị xóa, nhưng hãy kiểm tra những gì nó đã thay đổi.
+</Callout>
+
+### B. Chỉ Neovim
+
+Sao lưu cấu hình hiện có của bạn, rồi liên kết thư mục `nvim/`:
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ mv ~/.config/nvim ~/.config/nvim.bak
+$ mv ~/.local/share/nvim ~/.local/share/nvim.bak
+$ mv ~/.local/state/nvim ~/.local/state/nvim.bak
+$ mv ~/.cache/nvim ~/.cache/nvim.bak
+$ ln -s ~/dotfiles/nvim ~/.config/nvim
+```
+
+Nếu một trong các thư mục đó không tồn tại, `mv` chỉ báo như vậy. Bạn có thể bỏ qua.
+
+### C. Dùng thử mà không đụng đến thiết lập hiện tại
+
+Đây là cách tôi khuyên dùng cho lần thử đầu tiên. Neovim đọc cấu hình từ thư mục đặt theo `NVIM_APPNAME`, nên bạn có thể chạy cấu hình này song song với cấu hình của mình:
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ ln -s ~/dotfiles/nvim ~/.config/nvim-ryan
+$ NVIM_APPNAME=nvim-ryan nvim
+```
+
+Plugin và trạng thái cũng được lưu vào các thư mục `nvim-ryan`, nên thiết lập bình thường của bạn không bị ảnh hưởng.
+
+<Callout type="tip" lang="vi">
+  Các module Lua nằm trong `lua/ryanparker/`. Khi muốn biến cấu hình thành của riêng mình, hãy đổi
+  tên thư mục đó và các lệnh `require("ryanparker…")` thành tên của bạn.
+</Callout>
+
+Dù bạn chọn cách nào, giờ bạn đã có một thư mục các tệp văn bản thuần. Không có gì bị giấu trong một plugin hay một gói được sinh tự động, và đó chính là điểm mấu chốt: nếu muốn biết vì sao một thứ hoạt động như vậy, bạn có thể mở tệp ra đọc. Hãy nhớ điều đó cho phần tiếp theo, nơi chúng ta đi qua đường khởi động từ dòng đầu tiên.
+
+## Cách nó khởi động
+
+Trước lần chạy đầu tiên, nên biết điều gì xảy ra khi Neovim khởi động, để các tệp có ý nghĩa khi bạn mở chúng.
+
+<NeovimStartupDiagram lang="vi" />
+
+Neovim đọc `init.lua`. Nó bật `vim.loader`, thứ lưu cache mã Lua đã biên dịch, rồi nạp hai thứ: các thiết lập lõi và lazy.nvim.
+
+```lua title="init.lua"
+-- Minimal Neovim config for web, data, Java/Python, and SRE work.
+vim.loader.enable()
+
+require("ryanparker.core")
+require("ryanparker.lazy")
+```
+
+`core/init.lua` đặt <kbd>Space</kbd> làm phím leader và tắt netrw, vì oil.nvim là trình duyệt tệp. Sau đó nó nạp options, keymaps và autocmds.
+
+```lua title="lua/ryanparker/core/init.lua"
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+
+-- Disable netrw before plugins load. oil.nvim is the file browser.
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
+require("ryanparker.core.options")
+require("ryanparker.core.keymaps")
+require("ryanparker.core.autocmds")
+```
+
+`lazy.lua` cài lazy.nvim nếu chưa có, rồi trao danh sách plugin cho nó. Chú ý `defaults = { lazy = true }`: mọi plugin đều chờ đến khi có thứ cần đến nó, như một phím bấm, một lệnh hoặc một loại tệp.
+
+```lua title="lua/ryanparker/lazy.lua" {3-10,17,19}
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not vim.uv.fs_stat(lazypath) then
+  local out = vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "--branch=stable",
+    "https://github.com/folke/lazy.nvim.git",
+    lazypath,
+  })
+  -- …
+end
+vim.opt.rtp:prepend(lazypath)
+
+require("lazy").setup({
+  spec = {
+    { import = "ryanparker.plugins" },
+  },
+  defaults = { lazy = true },
+  -- …
+})
+```
+
+`import = "ryanparker.plugins"` nạp mọi tệp trong thư mục `plugins/`. Mỗi tệp lo một chủ đề:
+
+| Tệp | Nội dung |
+| --- | --- |
+| `ui.lua` | giao diện, thanh trạng thái, biểu tượng, which-key |
+| `navigation.lua` | oil, telescope, smart-splits |
+| `editing.lua` | autopairs, surround, plenary |
+| `git.lua` | gitsigns, diffview |
+| `lsp.lua` | mason, lspconfig, nvim-jdtls, lazydev |
+| `completion.lua` | blink.cmp, snippets, nguồn dadbod |
+| `formatting.lua` | conform.nvim |
+| `linting.lua` | nvim-lint |
+| `treesitter.lua` | các parser của Treesitter |
+| `data.lua` | dbt và công cụ cơ sở dữ liệu |
+| `dev.lua` | trouble, grug-far, dap, neotest |
+| `extras.lua` | quicker, treesitter-context, todo-comments, snacks, refactoring, yaml.nvim, overseer |
+
+## Bước 3: khởi chạy lần đầu
+
+Chạy `nvim`. Lần khởi động đầu tiên mất một lúc, vì có rất nhiều việc diễn ra ở nền:
+
+1. **lazy.nvim** tự clone, rồi cài các plugin. Bạn sẽ thấy cửa sổ `:Lazy`. Nếu có gì lỗi, chạy `:Lazy sync` để thử lại.
+2. **Treesitter** cài các parser. Nếu thiếu CLI `tree-sitter`, bạn sẽ thấy cảnh báo này, được trích nguyên văn từ cấu hình:
+
+   ```lua title="lua/ryanparker/plugins/treesitter.lua"
+           vim.schedule(function()
+             vim.notify("Install tree-sitter CLI for parser install/update: brew install tree-sitter", vim.log.levels.WARN)
+           end)
+   ```
+
+3. **Mason** cài công cụ ở nền. mason-tool-installer chạy ở sự kiện `VeryLazy` và cài các công cụ định dạng và linting. Các language server đến từ `ensure_installed` của mason-lspconfig, và được cài khi bạn mở tệp đầu tiên. Theo dõi tiến độ bằng `:Mason`.
+
+Đừng lo nếu màn hình trông rối trong lần chạy đầu. Các thanh tiến trình và thông báo xuất hiện rồi biến mất khi plugin và công cụ được cài, và vài dòng chữ đỏ là chuyện thường khi một lượt tải bị gián đoạn. Nếu không chắc nó đã xong chưa, hãy mở `:Lazy` và `:Mason` rồi kiểm tra không còn mục nào đang được cài.
+
+Đây là danh sách các language server:
+
+```lua title="lua/ryanparker/plugins/lsp.lua"
+local lsp_servers = {
+  "lua_ls",
+  "basedpyright",
+  "ruff",
+  "vtsls",
+  "html",
+  "cssls",
+  "tailwindcss",
+  "emmet_ls",
+  "jsonls",
+  "yamlls",
+  "taplo",
+  "marksman",
+  "bashls",
+  "dockerls",
+  "terraformls",
+  "jdtls",
+}
+```
+
+Khi mọi thứ xong, thoát bằng `:q` và mở lại Neovim một lần nữa. Lần khởi động thứ hai sẽ nhanh và yên lặng.
+
+Lần khởi động thứ hai cũng là lúc tốt để xem nó nhanh đến đâu. Chạy `nvim --startuptime startup.log` rồi mở tệp log: hầu hết các dòng đều rất nhỏ, vì những plugin chưa cần thì chưa được nạp. Nếu khởi động chậm, log cho thấy tệp hay plugin nào tốn nhiều thời gian nhất.
+
+## Bước 4: kiểm tra mọi thứ hoạt động
+
+Chạy `:checkhealth`. Nó in ra một báo cáo dài. Những phần quan trọng ở đây là `lazy`, `mason`, `vim.lsp` và `nvim-treesitter`. Các cảnh báo về provider tùy chọn, như Ruby hay Perl, thường có thể bỏ qua.
+
+Tiếp theo, thử với một tệp thật. Mở một tệp Python bất kỳ:
+
+```sh
+$ nvim hello.py
+```
+
+Rồi kiểm tra ba điều:
+
+- Thanh trạng thái ở dưới cùng hiện các language server đã gắn, ví dụ `basedpyright, ruff`.
+- <kbd>K</kbd> trên tên một hàm hiện tài liệu của nó.
+- Lưu tệp bằng `:w` sẽ định dạng nó bằng ruff.
+
+Sau đó mở một tệp Lua, ví dụ `~/.config/nvim-ryan/init.lua` nếu bạn dùng cách C. Server `lua_ls` sẽ gắn vào, các lệnh gọi `vim.` có gợi ý mã và tài liệu, và git signs xuất hiện ở lề trái cạnh mọi dòng bạn sửa trong một repository. Nếu cả ba đều hoạt động, công cụ trên máy, Mason và các plugin đang làm việc với nhau đúng cách.
+
+Để xem kỹ hơn, chạy `:ConformInfo` để biết trình định dạng nào đã chạy, và `:checkhealth vim.lsp` để xem trạng thái language server.
+
+## Các phím tắt đầu tiên cần học
+
+Nhấn <kbd>Space</kbd> và chờ: which-key hiện mọi nhóm phím tắt. Đây là những phím tôi dùng cả ngày:
+
+| Phím | Tác dụng |
+| --- | --- |
+| `<leader>ff` | tìm tệp |
+| `<leader>fg` | tìm nội dung (live grep) |
+| `<leader>fb` | các buffer |
+| `<leader>e` | trình quản lý tệp (cửa sổ nổi) |
+| `-` | mở thư mục cha |
+| `<leader>w` | lưu |
+| `<leader>cf` | định dạng |
+| `gd` | đi đến định nghĩa |
+| `K` | xem tài liệu |
+| `grn` | đổi tên |
+| `]d` / `[d` | chẩn đoán kế tiếp / trước đó |
+| `]h` / `[h` | hunk git kế tiếp / trước đó |
+| `<M-h/j/k/l>` | di chuyển giữa các split, rồi đến các pane tmux |
+| `<leader>uu` | cây undo |
+
+Các phím tắt theo một quy luật dễ nhớ. Sau <kbd>Space</kbd>, chữ cái đầu chọn nhóm: <kbd>f</kbd> cho tìm kiếm, <kbd>g</kbd> cho git, <kbd>c</kbd> cho mã, <kbd>b</kbd> cho buffer và <kbd>u</kbd> cho các nút bật tắt giao diện. Chữ cái thứ hai chọn hành động. Khi quên một phím, hãy nhấn <kbd>Space</kbd> và đọc danh sách; which-key sinh ra để làm việc đó.
+
+`<leader>` là <kbd>Space</kbd>, và `<M-…>` là phím Option trên macOS (terminal của bạn phải gửi nó như Alt).
+
+Hầu hết vấn đề trong thiết lập này quy về một trong ba thứ: thiếu một công cụ trên máy, terminal chưa được cấu hình cho biểu tượng, hoặc một lượt tải bị gián đoạn. Khi có gì đó trông sai, hãy bắt đầu với `:checkhealth` và `:Lazy`, vì chúng thường nêu thẳng vấn đề. Danh sách dưới đây gồm những lỗi tôi gặp nhiều nhất.
+
+## Khắc phục sự cố
+
+- **Biểu tượng hiện thành ô vuông.** Terminal của bạn chưa dùng Nerd Font. Hãy đặt một font trong phần cài đặt font của terminal.
+- **Cảnh báo về CLI `tree-sitter`.** Chạy `brew install tree-sitter`, rồi `:TSUpdate`.
+- **Telescope chậm, hoặc thiếu extension fzf.** Cài Xcode Command Line Tools, rồi chạy `:Lazy build telescope-fzf-native.nvim`.
+- **Thiếu `sqlfluff`.** Python của bạn cũ hơn 3.10, nên cấu hình bỏ qua nó.
+- **Bạn muốn làm lại từ đầu.** Xóa `~/.local/share/nvim` (hoặc `~/.local/share/nvim-ryan`) rồi khởi chạy lại.
+
+## Tiếp theo
+
+Ở Phần 2, chúng ta sẽ thiết lập các ngôn ngữ cho đầy đủ: language server, gợi ý mã, định dạng và linting cho từng loại tệp bạn làm việc.

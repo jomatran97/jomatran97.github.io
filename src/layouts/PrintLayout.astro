@@ -1,0 +1,25 @@
+---
+import '~/styles/global.css';
+import '~/styles/print.css';
+import { htmlLang, type Lang } from '~/i18n';
+
+interface Props {
+  title: string;
+  lang: Lang;
+  fallback?: boolean;
+}
+const { title, lang, fallback = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang={htmlLang(fallback ? 'en' : lang)} data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+  </head>
+  <body data-pagefind-ignore>
+    <slot />
+  </body>
+</html>

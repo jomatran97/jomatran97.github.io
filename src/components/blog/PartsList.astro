@@ -1,0 +1,50 @@
+---
+import { useT, type Lang } from '~/i18n';
+import { localePath } from '~/i18n/routes';
+
+interface Props {
+  lang: Lang;
+  parts: { part: number; title: string; post?: { slug: string } }[];
+  current: number;
+}
+const { lang, parts, current } = Astro.props;
+const t = useT(lang);
+---
+
+<ol class="parts">
+  {parts.map((p) => (
+    <li aria-current={p.part === current ? 'true' : undefined}>
+      {p.part === current ? (
+        <strong>
+          {t('series.part', { n: p.part })}: {p.title}
+        </strong>
+      ) : p.post ? (
+        <a href={localePath(`/blog/${p.post.slug}/`, lang)}>
+          {t('series.part', { n: p.part })}: {p.title}
+        </a>
+      ) : (
+        <span class="soon">
+          {t('series.part', { n: p.part })}: {p.title} <span class="chip">{t('series.soon')}</span>
+        </span>
+      )}
+    </li>
+  ))}
+</ol>
+
+<style>
+  .parts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .soon {
+    color: var(--text-2);
+  }
+  .soon .chip {
+    margin-left: 6px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+</style>

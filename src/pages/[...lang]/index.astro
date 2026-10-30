@@ -1,0 +1,105 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import '~/styles/home.css';
+import ProfileRail from '~/components/home/ProfileRail.astro';
+import SkillsColumns from '~/components/home/SkillsColumns.astro';
+import WorkWriting from '~/components/home/WorkWriting.astro';
+import FeaturedStories from '~/components/home/FeaturedStories.astro';
+import ContactBand from '~/components/home/ContactBand.astro';
+import { getPosts, getSeriesList } from '~/lib/blog-content';
+import { getLocalized, getProfile } from '~/lib/content';
+import { sortProjects, sortRoles } from '~/lib/cv';
+import { homeSections } from '~/lib/home';
+import { personLd } from '~/lib/jsonld';
+import { getLang, langStaticPaths, localePath } from '~/i18n/routes';
+import { useT } from '~/i18n';
+
+export const getStaticPaths = (() => langStaticPaths()) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { data: p, fallback: f1 } = await getProfile(lang);
+const { items: skills, fallback: f2 } = await getLocalized('skills', lang);
+const { items: certs, fallback: f3 } = await getLocalized('certifications', lang);
+const { items: roles, fallback: f4 } = await getLocalized('experience', lang);
+const { items: allProjects } = await getLocalized('projects', lang);
+const { items: allStories } = await getLocalized('star', lang);
+const { posts: allPosts } = await getPosts(lang);
+const { series } = await getSeriesList(lang);
+
+const role = sortRoles(roles.map((r) => ({ ...r, start: r.data.start, end: r.data.end })))[0];
+const project = sortProjects(
+  allProjects
+    .filter((x) => x.data.featured)
+    .map((x) => ({ ...x, start: x.data.start, end: x.data.end, featured: true })),
+)[0];
+const sortedCerts = [...certs].sort((a, b) => b.data.year.localeCompare(a.data.year));
+const stories = allStories
+  .filter((s) => s.data.featured)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 3);
+const posts = allPosts.slice(0, 3);
+const seriesTitle = (id?: string) => series.find((s) => s.slug === id)?.data.title;
+// Banner only when something shown on the page is really untranslated.
+const shown = [...stories, ...posts, ...(project ? [project] : [])];
+const fallback =
+  f1 || f2 || f3 || f4 || (lang !== 'en' && shown.some((i) => i.contentLang !== lang));
+const jsonLd = personLd(p, new URL(localePath('/', lang), Astro.site).href, lang);
+const index = homeSections(stories.length).map((id) => ({ id, label: t(`home.nav.${id}`) }));
+---
+
+<BaseLayout
+  title={t('meta.siteName')}
+  description={t('home.description')}
+  {lang}
+  {fallback}
+  {jsonLd}
+  wide
+>
+  <div class="home">
+    <div class="home-grid">
+      <ProfileRail {lang} profile={p} {role} {index} />
+
+      <div class="canvas">
+        <section id="skills" class="band" aria-labelledby="skills-title">
+          <header class="section-head" data-block>
+            <h2 id="skills-title">{t('home.skills.title')}</h2>
+            <p class="text-xl text-text-2">{t('home.skills.subline')}</p>
+          </header>
+          <SkillsColumns {skills} />
+          <p class="mt-8" data-block>
+            <a href={localePath('/experiences/', lang)} class="link-quiet">
+              {t('home.skills.more')}
+            </a>
+          </p>
+        </section>
+
+        <section id="work" class="band band-alt" aria-labelledby="work-title">
+          <header class="section-head" data-block>
+            <h2 id="work-title">{t('home.work.title')}</h2>
+          </header>
+          <WorkWriting {lang} {project} {posts} certs={sortedCerts} {seriesTitle} />
+        </section>
+
+        {stories.length > 0 && (
+          <section id="stories" class="band" aria-labelledby="stories-title">
+            <header class="section-head" data-block>
+              <h2 id="stories-title">{t('home.stories.title')}</h2>
+            </header>
+            <FeaturedStories {stories} {lang} />
+            <p class="mt-8" data-block>
+              <a href={localePath('/star/', lang)} class="link-quiet">
+                {t('home.stories.all')}
+              </a>
+            </p>
+          </section>
+        )}
+
+        <section id="contact" class="band band-alt band-compact" aria-labelledby="contact-title">
+          <ContactBand {lang} profile={p} />
+        </section>
+      </div>
+    </div>
+  </div>
+</BaseLayout>

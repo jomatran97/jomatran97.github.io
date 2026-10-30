@@ -1,0 +1,323 @@
+---
+title: 'Neovim setup guide, Part 1: from zero to a working editor'
+description: 'Install the tools, get my Neovim 0.12 config running on macOS, and check that everything works, in about 15 minutes.'
+pubDate: 2026-10-30
+tags: ['neovim', 'dotfiles', 'macos', 'developer-tools']
+series: 'neovim-setup-guide'
+seriesPart: 1
+---
+
+import Callout from '~/components/blog/Callout.astro';
+import NeovimStartupDiagram from '~/components/blog/diagrams/NeovimStartupDiagram.astro';
+
+This guide takes you from nothing to a working Neovim on macOS, using a small config I built for a mix of web, data engineering and SRE work: Java, Python, dbt/SQL, Terraform, Bash, CloudFormation/YAML, JSON, Docker and frontend files. It needs **Neovim 0.12 or newer**, and step 1 checks that.
+
+I wrote it because big distros like LazyVim or NvChad do a lot for you, and then it's hard to tell which part does what. This config is the opposite: one Lua file per topic, plugins loaded only when they're needed, and nothing I can't explain. Over five parts you'll build it up step by step. This first part makes sure everything installs and starts. You can see the whole series on the [series page](/blog/series/neovim-setup-guide/).
+
+<Callout type="note">
+  **Tested with:** Neovim 0.12, macOS, dotfiles commit `2101fb4`. **Source:**
+  [github.com/jomatran97/dotfiles](https://github.com/jomatran97/dotfiles) (folder `nvim/`).
+</Callout>
+
+## What you'll have at the end
+
+When you finish this part, you'll have:
+
+- **lazy.nvim** as the plugin manager, managing 49 plugins that are lazy-loaded by default.
+- **oil.nvim** as a file explorer that works like a normal buffer.
+- **telescope.nvim** as a fuzzy finder for files, text and buffers.
+- Language servers that **Mason** installs for you.
+- **Format on save** with conform.nvim, and **linting** with nvim-lint.
+- **Treesitter** syntax highlighting.
+- **Git signs** in the gutter, **which-key** hints when you press a key prefix, and the **catppuccin mocha** theme.
+
+Languages get properly set up in Part 2. Part 1 makes sure everything installs and starts.
+
+A word on "lazy-loaded", since it explains most of how this config feels. A normal plugin loads every time Neovim starts, so each plugin adds to the startup time. A lazy-loaded plugin waits until you use it: pressing a mapped key, running a command or opening a certain kind of file. That's how a config with this many plugins can still start in a blink. The price is that a failing plugin might only show up when you first reach for it, which is why the checks in step 4 matter.
+
+The whole guide takes about 15 minutes if your downloads are fast. Most of that is waiting for Homebrew and for the first launch.
+
+## Before you start
+
+You need macOS with [Homebrew](https://brew.sh). On top of that:
+
+- **Neovim 0.12 or newer.** Check what you have:
+
+  ```sh
+  $ nvim --version
+  ```
+
+  If it's older, or missing, run `brew install neovim` (or `brew upgrade neovim`).
+
+<Callout type="warning">
+  Neovim 0.11 and older fail on this config. It sets the 0.12-only `pumborder` option and loads
+  the built-in undotree with `packadd nvim.undotree`.
+</Callout>
+
+- **A Nerd Font** set in your terminal, for example FiraCode Nerd Font:
+
+  ```sh
+  $ brew install --cask font-fira-code-nerd-font
+  ```
+
+  Without one, the icons show up as empty boxes.
+
+- **Xcode Command Line Tools** (`xcode-select --install`). Telescope's `fzf-native` extension is built with `make`.
+- **Python 3.10 or newer**, if you want Mason to install `sqlfluff`. On older versions the config skips it.
+
+## Step 1: install the host tools
+
+Neovim calls several programs on your machine. Install them with Homebrew and pipx:
+
+```sh
+$ brew install neovim git curl ripgrep fd tree-sitter node python pipx openjdk terraform shellcheck shfmt tflint cfn-lint
+$ pipx install dbt-core
+$ pipx install sqlfluff
+```
+
+Here is why each one is there:
+
+- `git` and `curl`: lazy.nvim clones plugins with git, and Mason downloads tools.
+- `ripgrep` and `fd`: telescope uses them to search file contents and file names.
+- `tree-sitter`: the CLI that builds Treesitter parsers.
+- `node`: many language servers are JavaScript programs, and `prettier` needs it too.
+- `python` and `pipx`: `dbt-core` and `sqlfluff` live in their own isolated environments.
+- `openjdk`: only needed for Java, which Part 4 covers.
+- `terraform`, `shellcheck`, `shfmt`, `tflint` and `cfn-lint`: formatters and linters for Terraform, Bash and CloudFormation, used in Part 2.
+
+Optionally, install `lazygit` for a Git interface you open with <kbd>Space</kbd> <kbd>g</kbd> <kbd>g</kbd>:
+
+```sh
+$ brew install lazygit
+```
+
+If a command in this step fails, don't keep going. A missing tool now becomes a confusing error later, and fixing it takes a minute. Run `brew doctor` if Homebrew itself complains, and re-run the failed command once the problem is fixed. Homebrew skips anything that's already installed, so repeating the command is safe.
+
+## Step 2: get the config
+
+There are three ways to get the config. Pick one.
+
+### A. The whole dotfiles repo
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ cd ~/dotfiles
+$ ./install.sh
+```
+
+<Callout type="warning">
+  `install.sh` links more than Neovim: it also sets up zsh, tmux, alacritty, yabai, skhd and
+  starship. Anything already in the way is moved to `<path>.bak.<timestamp>`, so nothing is
+  deleted, but check what it changed.
+</Callout>
+
+### B. Neovim only
+
+Back up any config you already have, then link the `nvim/` folder:
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ mv ~/.config/nvim ~/.config/nvim.bak
+$ mv ~/.local/share/nvim ~/.local/share/nvim.bak
+$ mv ~/.local/state/nvim ~/.local/state/nvim.bak
+$ mv ~/.cache/nvim ~/.cache/nvim.bak
+$ ln -s ~/dotfiles/nvim ~/.config/nvim
+```
+
+If one of those folders doesn't exist, `mv` just says so. You can ignore that.
+
+### C. Try it without touching your setup
+
+This is the one I recommend for a first try. Neovim reads its config from a folder named after `NVIM_APPNAME`, so you can run this config next to your own:
+
+```sh
+$ git clone https://github.com/jomatran97/dotfiles.git ~/dotfiles
+$ ln -s ~/dotfiles/nvim ~/.config/nvim-ryan
+$ NVIM_APPNAME=nvim-ryan nvim
+```
+
+Plugins and state then go to `nvim-ryan` folders too, so your normal setup stays as it is.
+
+<Callout type="tip">
+  The Lua modules live under `lua/ryanparker/`. When you want to make the config your own, rename
+  that folder and the `require("ryanparker…")` calls to your own name.
+</Callout>
+
+Whichever option you chose, you now have a folder of plain text files. Nothing is hidden inside a plugin or a generated bundle, and that's the point: if you want to know why something behaves the way it does, you can open the file and read it. Keep that in mind for the next section, where we walk through the startup path from the first line.
+
+## How it starts
+
+Before the first launch, it helps to know what happens when Neovim starts, so the files make sense when you open them.
+
+<NeovimStartupDiagram lang="en" />
+
+Neovim reads `init.lua`. It turns on `vim.loader`, which caches compiled Lua, and then loads two things: the core settings and lazy.nvim.
+
+```lua title="init.lua"
+-- Minimal Neovim config for web, data, Java/Python, and SRE work.
+vim.loader.enable()
+
+require("ryanparker.core")
+require("ryanparker.lazy")
+```
+
+`core/init.lua` sets <kbd>Space</kbd> as the leader key and turns off netrw, because oil.nvim is the file browser. Then it loads options, keymaps and autocmds.
+
+```lua title="lua/ryanparker/core/init.lua"
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+
+-- Disable netrw before plugins load. oil.nvim is the file browser.
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
+require("ryanparker.core.options")
+require("ryanparker.core.keymaps")
+require("ryanparker.core.autocmds")
+```
+
+`lazy.lua` installs lazy.nvim if it isn't there yet, then hands over the plugin list. Notice `defaults = { lazy = true }`: every plugin waits until something needs it, such as a key press, a command or a file type.
+
+```lua title="lua/ryanparker/lazy.lua" {3-10,17,19}
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not vim.uv.fs_stat(lazypath) then
+  local out = vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "--branch=stable",
+    "https://github.com/folke/lazy.nvim.git",
+    lazypath,
+  })
+  -- …
+end
+vim.opt.rtp:prepend(lazypath)
+
+require("lazy").setup({
+  spec = {
+    { import = "ryanparker.plugins" },
+  },
+  defaults = { lazy = true },
+  -- …
+})
+```
+
+`import = "ryanparker.plugins"` loads every file in the `plugins/` folder. Each file covers one topic:
+
+| File | What it holds |
+| --- | --- |
+| `ui.lua` | theme, statusline, icons, which-key |
+| `navigation.lua` | oil, telescope, smart-splits |
+| `editing.lua` | autopairs, surround, plenary |
+| `git.lua` | gitsigns, diffview |
+| `lsp.lua` | mason, lspconfig, nvim-jdtls, lazydev |
+| `completion.lua` | blink.cmp, snippets, dadbod source |
+| `formatting.lua` | conform.nvim |
+| `linting.lua` | nvim-lint |
+| `treesitter.lua` | Treesitter parsers |
+| `data.lua` | dbt and database tooling |
+| `dev.lua` | trouble, grug-far, dap, neotest |
+| `extras.lua` | quicker, treesitter-context, todo-comments, snacks, refactoring, yaml.nvim, overseer |
+
+## Step 3: first launch
+
+Run `nvim`. The first start takes a while, because a lot happens in the background:
+
+1. **lazy.nvim** clones itself, then installs the plugins. You'll see the `:Lazy` window. If anything fails, run `:Lazy sync` to try again.
+2. **Treesitter** installs its parsers. If the `tree-sitter` CLI is missing, you'll see this warning, which is quoted exactly from the config:
+
+   ```lua title="lua/ryanparker/plugins/treesitter.lua"
+           vim.schedule(function()
+             vim.notify("Install tree-sitter CLI for parser install/update: brew install tree-sitter", vim.log.levels.WARN)
+           end)
+   ```
+
+3. **Mason** installs tools in the background. mason-tool-installer starts on `VeryLazy` and installs formatters and linters. The language servers come from mason-lspconfig's `ensure_installed`, and they install when you open your first file. Watch progress with `:Mason`.
+
+Don't worry if the screen looks busy during this first run. Progress bars and messages appear and disappear while the plugins and tools install, and a few lines of red text are common when a download is interrupted. If you're unsure whether it's finished, open `:Lazy` and `:Mason` and check that nothing is still marked as installing.
+
+Here is the list of language servers:
+
+```lua title="lua/ryanparker/plugins/lsp.lua"
+local lsp_servers = {
+  "lua_ls",
+  "basedpyright",
+  "ruff",
+  "vtsls",
+  "html",
+  "cssls",
+  "tailwindcss",
+  "emmet_ls",
+  "jsonls",
+  "yamlls",
+  "taplo",
+  "marksman",
+  "bashls",
+  "dockerls",
+  "terraformls",
+  "jdtls",
+}
+```
+
+When everything has finished, quit with `:q` and open Neovim once more. A second start should be quick and quiet.
+
+The second launch is also a good moment to look at how fast it is. Run `nvim --startuptime startup.log` and open the log: most entries are tiny, because plugins that are not needed yet are not loaded. If your startup is slow, the log shows which file or plugin costs the most time.
+
+## Step 4: check that everything works
+
+Run `:checkhealth`. It prints a long report. These sections are the ones that matter here: `lazy`, `mason`, `vim.lsp` and `nvim-treesitter`. Warnings about optional providers, such as Ruby or Perl, are usually safe to ignore.
+
+Next, test a real file. Open any Python file:
+
+```sh
+$ nvim hello.py
+```
+
+Then check three things:
+
+- The statusline at the bottom shows the attached language servers, for example `basedpyright, ruff`.
+- <kbd>K</kbd> on a function name shows its documentation.
+- Saving the file with `:w` formats it with ruff.
+
+Then open a Lua file, for example `~/.config/nvim-ryan/init.lua` if you used option C. The `lua_ls` server attaches, `vim.` calls get completion and documentation, and git signs appear in the left gutter next to any line you change inside a repository. If all three work, your host tools, Mason and the plugins are talking to each other correctly.
+
+To look closer, run `:ConformInfo` to see which formatter ran, and `:checkhealth vim.lsp` to see the language server status.
+
+## The first keymaps to learn
+
+Press <kbd>Space</kbd> and wait: which-key shows every group of keymaps. These are the ones I use all day:
+
+| Key | Action |
+| --- | --- |
+| `<leader>ff` | find files |
+| `<leader>fg` | live grep |
+| `<leader>fb` | buffers |
+| `<leader>e` | file explorer (float) |
+| `-` | open the parent directory |
+| `<leader>w` | save |
+| `<leader>cf` | format |
+| `gd` | go to definition |
+| `K` | hover |
+| `grn` | rename |
+| `]d` / `[d` | next / previous diagnostic |
+| `]h` / `[h` | next / previous git hunk |
+| `<M-h/j/k/l>` | move between splits, then tmux panes |
+| `<leader>uu` | undo tree |
+
+The keymaps follow a pattern that is easy to remember. After <kbd>Space</kbd>, the first letter picks a group: <kbd>f</kbd> for find, <kbd>g</kbd> for git, <kbd>c</kbd> for code, <kbd>b</kbd> for buffers and <kbd>u</kbd> for UI toggles. The second letter picks the action. When you forget one, press <kbd>Space</kbd> and read the list; that's what which-key is for.
+
+`<leader>` is <kbd>Space</kbd>, and `<M-…>` is the Option key on macOS (your terminal must send it as Alt).
+
+Most problems in this setup come down to one of three things: a missing host tool, a terminal that isn't configured for icons, or a download that was interrupted. When something looks wrong, start with `:checkhealth` and `:Lazy`, because they usually name the problem directly. The list below covers the ones I hit most often.
+
+## Troubleshooting
+
+- **Icons show as boxes.** Your terminal isn't using a Nerd Font. Set one in the terminal's font setting.
+- **A warning about the `tree-sitter` CLI.** Run `brew install tree-sitter`, then `:TSUpdate`.
+- **Telescope is slow, or the fzf extension is missing.** Install the Xcode Command Line Tools, then run `:Lazy build telescope-fzf-native.nvim`.
+- **`sqlfluff` is missing.** Your Python is older than 3.10, so the config skips it.
+- **You want to start over.** Remove `~/.local/share/nvim` (or `~/.local/share/nvim-ryan`) and launch again.
+
+## What's next
+
+In Part 2 we'll set up the languages properly: language servers, completion, formatting and linting for each file type you work with.

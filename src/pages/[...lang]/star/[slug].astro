@@ -1,0 +1,73 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import StarStepper from '~/components/star/StarStepper.astro';
+import { competencies } from '~/content/competencies';
+import { getLocalized, render } from '~/lib/content';
+import { companyLabel } from '~/lib/cv';
+import { splitStarHtml } from '~/lib/star';
+import { getLang, langStaticPaths, localePath, switchTarget } from '~/i18n/routes';
+import { useT, type Lang } from '~/i18n';
+
+export const getStaticPaths = (async () => {
+  const paths = [];
+  for (const { params } of langStaticPaths()) {
+    const { items } = await getLocalized('star', getLang(params.lang));
+    for (const story of items)
+      paths.push({ params: { ...params, slug: story.slug }, props: { story } });
+  }
+  return paths;
+}) satisfies GetStaticPaths;
+
+const lang = getLang(Astro.params.lang);
+const t = useT(lang);
+const { story } = Astro.props;
+const d = story.data;
+await render(story);
+const { lead, sections: html } = splitStarHtml(story.rendered?.html ?? '');
+const { items: roles } = await getLocalized('experience', lang);
+const role = roles.find((r) => r.slug === d.role);
+if (d.role && !role)
+  throw new Error(`STAR story "${story.slug}" references unknown role "${d.role}".`);
+---
+
+<BaseLayout
+  title={d.title}
+  description={d.question}
+  {lang}
+  fallback={story.contentLang !== lang}
+  langs={story.available}
+  searchType="star"
+  switchHref={switchTarget(story.available, lang, `/star/${story.slug}/`, '/star/')}
+>
+  <article class="container-page page-head">
+    <p>
+      <a href={localePath(role ? `/star/#${role.slug}` : '/star/', lang)} class="link-quiet">
+        ← {t('star.back')}
+      </a>
+    </p>
+    <h1 class="mt-4">{d.title}</h1>
+    {d.sample && (
+      <p class="mt-3">
+        <span class="chip chip-butter">{t('star.sample')}</span>
+      </p>
+    )}
+    <p class="mt-3 text-xl text-text-2 italic">{d.question}</p>
+    <p class="meta mt-3">
+      {role
+        ? `${companyLabel(role.data.company, role.data.client)} · ${role.data.role}`
+        : t('star.other')}
+    </p>
+    <ul class="mt-4 flex flex-wrap gap-2">
+      {(d.competencies as (keyof typeof competencies)[]).map((c) => (
+        <li class="chip chip-sky">{competencies[c][lang as Lang]}</li>
+      ))}
+    </ul>
+    {lead && (
+      <div class="mt-6 rounded-xl bg-butter-tint px-4 py-3 text-[0.9375rem]" set:html={lead} />
+    )}
+    <div class="card mt-8 p-6">
+      <StarStepper {html} metrics={d.metrics} {lang} allOpen />
+    </div>
+  </article>
+</BaseLayout>

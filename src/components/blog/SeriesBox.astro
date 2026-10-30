@@ -1,0 +1,66 @@
+---
+import { useT, type Lang } from '~/i18n';
+import { localePath } from '~/i18n/routes';
+import PartsList from './PartsList.astro';
+
+interface Props {
+  lang: Lang;
+  series: { slug: string; title: string };
+  parts: { part: number; title: string; post?: { slug: string } }[];
+  current: number;
+}
+const { lang, series, parts, current } = Astro.props;
+const t = useT(lang);
+const label = t('series.box', { part: current, total: parts.length, title: series.title });
+---
+
+<nav class="series-box" aria-label={t('series.title')}>
+  <div class="wide">
+    <p class="head">
+      <a href={localePath(`/blog/series/${series.slug}/`, lang)}>{label}</a>
+    </p>
+    <PartsList {lang} {parts} {current} />
+  </div>
+  <details class="narrow">
+    <summary>{label}</summary>
+    <PartsList {lang} {parts} {current} />
+  </details>
+</nav>
+
+<style>
+  .series-box {
+    margin-block: 24px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    background: var(--surface-2);
+    font-size: 0.9375rem;
+  }
+  .head {
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .head a {
+    color: var(--text);
+  }
+  summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .narrow {
+    display: block;
+  }
+  .wide {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .wide {
+      display: block;
+    }
+    .narrow {
+      display: none;
+    }
+  }
+</style>

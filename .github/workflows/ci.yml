@@ -1,0 +1,250 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm check
+      - run: pnpm test
+      # actionlint runs from its official image (pinned by digest); zizmor from PyPI.
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
+      - name: zizmor
+        run: pipx run zizmor==1.5.2 --persona regular .github
+
+  build:
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Analytics beacon only on main, so PR builds never send analytics.
+      PUBLIC_CF_BEACON_TOKEN: ${{ github.ref == 'refs/heads/main' && vars.PUBLIC_CF_BEACON_TOKEN || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.astro
+          key: astro-${{ hashFiles('src/**/*.{png,jpg,jpeg,webp,avif,svg}') }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+      - run: pnpm build
+      - run: pnpm test:pdf # also writes the PDF page counts to the job summary
+      - run: pnpm test:budget # JS budget: 30 KB gzip per page
+      - name: Summary
+        run: |
+          {
+            echo "### Build"
+            echo "- Pages: $(find dist -name '*.html' | wc -l)"
+            echo "- dist size: $(du -sh dist | cut -f1)"
+            echo "- cv.pdf: $(du -h dist/cv.pdf | cut -f1), vi/cv.pdf: $(du -h dist/vi/cv.pdf | cut -f1)"
+            echo
+            echo "Artifacts: \`site\` (dist/ with both CV PDFs), Playwright, Lighthouse and link reports."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: dist
+          retention-days: ${{ github.ref == 'refs/heads/main' && 30 || 7 }}
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    env:
+      BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: dist
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ matrix.browser }}-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps "$BROWSER"
+      - if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps "$BROWSER"
+      - run: pnpm exec playwright test --project="$BROWSER"
+      - if: always()
+        run: pnpm exec tsx scripts/ci-summary.ts e2e "$BROWSER"
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  lighthouse:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: dist
+      - run: pnpm lhci autorun
+      - if: always()
+        run: pnpm exec tsx scripts/ci-summary.ts lighthouse
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+          if-no-files-found: ignore
+
+  links:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: dist
+      - name: Internal links (fail the job)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --config lychee.toml --offline --root-dir "$(pwd)/dist" --no-progress 'dist/**/*.html'
+          fail: true
+          output: link-report-internal.md
+      - name: External links (warnings only)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --config lychee.toml --scheme https --root-dir "$(pwd)/dist" --no-progress 'dist/**/*.html'
+          fail: false
+          output: link-report-external.md
+      - if: always()
+        run: |
+          for kind in internal external; do
+            f="link-report-$kind.md"
+            { echo "### Links ($kind)"; [ -f "$f" ] && cat "$f" || echo "No report."; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: link-report
+          path: link-report-*.md
+          if-no-files-found: ignore
+
+  ci-ok:
+    if: always()
+    needs: [static, build, e2e, lighthouse, links]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every job to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = success ] || { echo "A required job did not succeed ($r)"; exit 1; }
+          done
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: ci-ok
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://jomatran97.github.io
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Wait for this commit's build, then check routes
+        run: |
+          status() { curl -s -o /dev/null -w '%{http_code}' "$SITE$1"; }
+          # Every page carries <meta name="build-id" content="<commit sha>">.
+          live=0
+          for _ in $(seq 1 12); do
+            if curl -s "$SITE/" | grep -qF "content=\"$SHA\""; then live=1; break; fi
+            sleep 10
+          done
+          [ "$live" = 1 ] || { echo "New build ($SHA) did not go live in time"; exit 1; }
+          fail=0
+          for p in / /experiences/ /projects/ /vi/ /star/ /blog/ /rss.xml /sitemap-index.xml /pagefind/pagefind.js /cv.pdf /vi/cv.pdf /cv/ /vi/cv/ /vi/experiences/; do
+            code=$(status "$p"); echo "$p -> $code"; [ "$code" = 200 ] || fail=1
+          done
+          for p in /cv.pdf /vi/cv.pdf; do
+            type=$(curl -sI "$SITE$p" | tr -d '\r' | grep -i '^content-type:' || true)
+            echo "$p $type"; echo "$type" | grep -qi application/pdf || fail=1
+          done
+          code=$(status /does-not-exist); echo "/does-not-exist -> $code"; [ "$code" = 404 ] || fail=1
+          exit $fail
