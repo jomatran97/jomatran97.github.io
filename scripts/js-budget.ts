@@ -31,7 +31,7 @@ for (const file of pages) {
   const html = await readFile(file, 'utf8');
   let bytes = 0;
   const external = new Set<string>();
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     if (/application\/ld\+json/.test(m[1])) continue;
     const src = /\bsrc="([^"]+)"/.exec(m[1])?.[1];
     if (!src) bytes += gzipSync(m[2]).length;

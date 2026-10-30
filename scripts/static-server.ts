@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { open, readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 
 const TYPES: Record<string, string> = {
@@ -26,8 +26,14 @@ export function serve(dir: string, port = 0): Promise<{ server: Server; url: str
     let file = join(root, normalize(pathname));
     if (!file.startsWith(root)) return void res.writeHead(403).end();
     try {
-      if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
-      const body = await readFile(file);
+      // Read through one open handle so the stat and the read see the same file.
+      let fh = await open(file);
+      if ((await fh.stat()).isDirectory()) {
+        await fh.close();
+        file = join(file, 'index.html');
+        fh = await open(file);
+      }
+      const body = await fh.readFile().finally(() => fh.close());
       res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
       res.end(body);
     } catch {
